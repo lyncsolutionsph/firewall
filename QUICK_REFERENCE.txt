@@ -1,0 +1,230 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                SEER FIREWALL MANAGEMENT - QUICK REFERENCE                ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ INSTALLATION (ONE-TIME SETUP)                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  1. Transfer package to device:
+     $ scp seer-firewall-1.0.0.tar.gz admin@<device-ip>:~/
+
+  2. SSH to device:
+     $ ssh admin@<device-ip>
+
+  3. Extract and install:
+     $ tar -xzf seer-firewall-1.0.0.tar.gz
+     $ cd seer-firewall-1.0.0/
+     $ sudo ./install.sh
+
+  4. Access web interface:
+     http://<device-ip>:5000/
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ COMMON COMMANDS                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Service Management:
+    sudo systemctl status seer-firewall      # Check status
+    sudo systemctl restart seer-firewall     # Restart service
+    sudo systemctl stop seer-firewall        # Stop service
+    sudo systemctl start seer-firewall       # Start service
+    sudo journalctl -u seer-firewall -f      # View logs (live)
+    sudo journalctl -u seer-firewall -n 50   # View last 50 log lines
+
+  Firewall:
+    sudo nft list ruleset                    # View all rules
+    sudo nft list chain inet filter input    # View INPUT chain
+    sudo nft list chain inet filter forward  # View FORWARD chain
+    sudo nft list chain inet filter output   # View OUTPUT chain
+    sudo systemctl restart nftables          # Reload firewall
+
+  Database:
+    sqlite3 /home/admin/.node-red/seer_database/seer.db
+    > SELECT * FROM policy_rules;            # View policy rules
+    > SELECT * FROM custom_rules;            # View custom rules
+    > .exit                                  # Exit sqlite3
+
+  Backup:
+    cp /home/admin/.node-red/seer_database/seer.db ~/backup-$(date +%Y%m%d).db
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ FILE LOCATIONS                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  /opt/seer-firewall/                   Installation directory
+  /opt/seer-firewall/api.py             Flask API backend
+  /opt/seer-firewall/static/            Web interface files
+  /opt/seer-firewall/logs/              Log files
+  /home/admin/.node-red/seer_database/  Database directory
+  /home/admin/.node-red/seer_database/seer.db  SQLite database
+  /etc/nftables.conf                    Firewall configuration
+  /etc/systemd/system/seer-firewall.service  Systemd service file
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ WEB INTERFACE                                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  URL:           http://<device-ip>:5000/
+  
+  Policy Rules:
+    • Toggle SSH Access ON/OFF
+    • Toggle Web Interface ON/OFF
+    • Toggle NAT (Internet Access) ON/OFF
+
+  Custom Rules:
+    • Click "+ Add Custom Rule" button
+    • Fill form: Name, Port, Protocol, Action (ALLOW/BLOCK)
+    • Select access: LAN, Tailscale, WAN
+    • Click Save
+    • Toggle rules ON/OFF as needed
+    • Select and delete unwanted rules
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ TROUBLESHOOTING                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Service won't start:
+    sudo journalctl -u seer-firewall -n 50
+    sudo netstat -tulpn | grep 5000          # Check if port is in use
+
+  Web interface not loading:
+    curl http://localhost:5000/              # Test from device
+    sudo systemctl status seer-firewall      # Check service status
+
+  Rules not blocking:
+    sudo nft list ruleset | grep "Custom Rule"  # Verify rules exist
+    # Check database has access flags set:
+    sqlite3 /home/admin/.node-red/seer_database/seer.db \
+      "SELECT id,name,port,action,access_lan,access_tailnet,access_wan FROM custom_rules;"
+
+  Database errors:
+    ls -la /home/admin/.node-red/seer_database/seer.db  # Check exists
+    # Rebuild database:
+    sqlite3 /home/admin/.node-red/seer_database/seer.db < /opt/seer-firewall/database.sql
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ UPDATE PROCEDURE                                                         │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  1. Stop service:
+     $ sudo systemctl stop seer-firewall
+
+  2. Backup database:
+     $ cp /home/admin/.node-red/seer_database/seer.db ~/backup.db
+
+  3. Copy new files:
+     $ sudo cp api.py /opt/seer-firewall/
+     $ sudo cp index.* /opt/seer-firewall/static/
+
+  4. Restart:
+     $ sudo systemctl restart seer-firewall
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ UNINSTALLATION                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  $ cd ~/seer-firewall-1.0.0/
+  $ sudo ./uninstall.sh
+
+  Follow prompts to:
+    • Backup database (recommended: Yes)
+    • Remove database (optional: No to keep rules)
+    • Remove firewall config (optional: No to keep firewall)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ NETWORK CONFIGURATION                                                    │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Default Network:
+    LAN:       br0 (192.168.50.0/24)
+    WAN:       eth1
+    Tailscale: 100.64.0.0/10
+
+  Accessible Ports:
+    5000:      Web Interface (LAN + Tailscale)
+    1880:      Node-RED (Tailscale)
+    22:        SSH (WAN + Tailscale, rate-limited)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ API ENDPOINTS (for scripting)                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  GET  /api/rules                           List policy rules
+  POST /api/rules/<id>/toggle               Toggle rule on/off
+  GET  /api/custom-rules                    List custom rules
+  POST /api/custom-rules                    Create custom rule
+  POST /api/custom-rules/<id>/toggle        Toggle custom rule
+  DELETE /api/custom-rules/<id>             Delete custom rule
+
+  Example:
+    curl http://localhost:5000/api/rules
+    curl -X POST http://localhost:5000/api/custom-rules/<id>/toggle \
+         -H "Content-Type: application/json" \
+         -d '{"enabled": true}'
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ EXAMPLES - CUSTOM RULES                                                  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Block Facebook (HTTPS):
+    Name:     Block Facebook
+    Port:     443
+    Protocol: TCP
+    Action:   DROP (Block)
+    Access:   ☑ LAN
+
+  Allow Web Server:
+    Name:     Web Server
+    Port:     8080
+    Protocol: TCP
+    Action:   ACCEPT (Allow)
+    Access:   ☑ LAN  ☑ Tailscale
+
+  Block Telnet:
+    Name:     Block Telnet
+    Port:     23
+    Protocol: TCP
+    Action:   DROP (Block)
+    Access:   ☑ LAN  ☑ Tailscale  ☑ WAN
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ EMERGENCY RECOVERY                                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Lost SSH access:
+    • Connect monitor and keyboard directly to Raspberry Pi
+    • Login and check: sudo systemctl status seer-firewall
+    • Review firewall: sudo nft list ruleset | grep "port 22"
+    • Disable service if needed: sudo systemctl stop seer-firewall
+
+  Restore from backup:
+    $ cp ~/backup.db /home/admin/.node-red/seer_database/seer.db
+    $ sudo systemctl restart seer-firewall
+
+  Reset firewall to default:
+    $ sudo cp /etc/nftables.conf /etc/nftables.conf.backup
+    $ sudo systemctl restart nftables
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SUPPORT & DOCUMENTATION                                                  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  README.md                    Full documentation
+  DEPLOYMENT.md                Multi-device deployment guide
+  TESTING_GUIDE.md             Testing procedures
+  PACKAGE_SUMMARY.md           Complete package overview
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ VERSION INFO                                                             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  Version:   1.0.0
+  Platform:  Raspberry Pi OS (Debian)
+  Python:    3.7+
+  Firewall:  nftables
+  Database:  SQLite3
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                         END OF QUICK REFERENCE                           ║
+╚══════════════════════════════════════════════════════════════════════════╝

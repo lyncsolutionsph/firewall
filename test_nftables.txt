@@ -1,0 +1,6 @@
+﻿# Test nftables.conf snippet
+# Allow Temporal Policy Port (Remote)
+tcp dport $TEMPORAL_PORT ip saddr $TAILNET accept
+
+# Allow FastAPI (Remote)
+tcp dport $FASTAPI_PORT ip saddr $TAILNET accept
