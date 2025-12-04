@@ -832,7 +832,7 @@ function showAddRuleModal() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showToast('✓ Custom rule added successfully', 'success');
+                showToast('✓ Custom rule added and applied immediately (no reboot needed)', 'success');
                 loadCustomRules();
             } else {
                 showToast('Failed to add rule: ' + (data.error || 'Unknown error'), 'error');
@@ -1015,7 +1015,8 @@ function displayCustomRules(rules) {
         toggleCell.style.textAlign = 'center';
         toggleCell.style.width = '120px';
         
-        const isEnabled = rule.enabled !== false;
+        // Handle both boolean and integer (0/1) values from database
+        const isEnabled = rule.enabled === true || rule.enabled === 1;
         const toggle = createCustomRuleToggle(isEnabled, rule.id);
         toggleCell.appendChild(toggle);
         row.appendChild(toggleCell);

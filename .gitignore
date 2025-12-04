@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Backups
+*.backup
+*.backup.*
+backup-*.db
+
+# Distribution packages
+*.tar.gz
+*.zip
+*.tar
+*.sha256
+seer-firewall-*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# System
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Testing
+test_*.py
+*.test
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Generated documentation
+docs/_build/
+
+# Node modules (if any)
+node_modules/

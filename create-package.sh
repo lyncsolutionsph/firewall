@@ -25,6 +25,7 @@ echo ""
 REQUIRED_FILES=(
     "install.sh"
     "uninstall.sh"
+    "update.sh"
     "api.py"
     "index.html"
     "index.css"
@@ -79,6 +80,7 @@ echo -e "${GREEN}✓${NC} Created VERSION file"
 # Make scripts executable
 chmod +x "$PACKAGE_DIR/install.sh"
 chmod +x "$PACKAGE_DIR/uninstall.sh"
+chmod +x "$PACKAGE_DIR/update.sh"
 echo -e "${GREEN}✓${NC} Set executable permissions"
 
 # Create tarball

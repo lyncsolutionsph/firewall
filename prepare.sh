@@ -33,6 +33,7 @@ CORE_FILES=(
 SCRIPT_FILES=(
     "install.sh:Installation script"
     "uninstall.sh:Uninstallation script"
+    "update.sh:Git update script"
     "create-package.sh:Package creator"
 )
 
@@ -40,6 +41,7 @@ SCRIPT_FILES=(
 DOC_FILES=(
     "README.md:Main documentation"
     "DEPLOYMENT.md:Deployment guide"
+    "GIT_USAGE.md:Git repository guide"
 )
 
 ALL_GOOD=true

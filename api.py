@@ -542,12 +542,21 @@ def toggle_custom_rule(rule_id):
         
         # Apply or remove nftables rules based on state
         rule_dict = dict(rule)
+        print(f"Toggle rule {rule_id}: enabled={enabled}, rule_dict={rule_dict}")
+        
+        success = True
         if enabled:
-            apply_custom_rule(rule_id, rule_dict)
+            success = apply_custom_rule(rule_id, rule_dict)
         else:
-            remove_custom_rule(rule_dict)
+            success = remove_custom_rule(rule_dict)
         
         conn.close()
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to apply firewall rules'
+            }), 500
         
         return jsonify({
             'success': True,
@@ -559,9 +568,27 @@ def toggle_custom_rule(rule_id):
 def apply_custom_rule(rule_id, rule_data):
     """Apply custom rule to nftables"""
     try:
-        port = rule_data.get('port') or rule_data.get('port')
-        protocol = (rule_data.get('protocol') or rule_data.get('protocol', 'TCP')).lower()
-        action = (rule_data.get('action') or rule_data.get('action', 'ACCEPT')).lower()
+        port = rule_data.get('port')
+        protocol = (rule_data.get('protocol') or 'TCP').lower()
+        action = (rule_data.get('action') or 'ACCEPT').lower()
+        
+        # Get access flags (support both camelCase and snake_case)
+        access_lan = rule_data.get('accessLan') or rule_data.get('access_lan') or 0
+        access_tailnet = rule_data.get('accessTailnet') or rule_data.get('access_tailnet') or 0
+        access_wan = rule_data.get('accessWan') or rule_data.get('access_wan') or 0
+        
+        # Debug logging
+        print(f"Applying rule {rule_id}: port={port}, proto={protocol}, action={action}")
+        print(f"  Access: LAN={access_lan}, Tailnet={access_tailnet}, WAN={access_wan}")
+        
+        # Validate required fields
+        if not port:
+            print(f"✗ Rule {rule_id}: Missing port")
+            return False
+            
+        if not access_lan and not access_tailnet and not access_wan:
+            print(f"✗ Rule {rule_id}: No access sources selected")
+            return False
         
         # Determine protocol(s)
         protocols = []
@@ -572,14 +599,19 @@ def apply_custom_rule(rule_id, rule_data):
         
         # Add rules for each access point
         for proto in protocols:
-            if rule_data.get('accessLan') or rule_data.get('access_lan'):
+            if access_lan:
                 # LAN access - INPUT chain (traffic TO firewall)
-                subprocess.run([
+                result = subprocess.run([
                     'nft', 'add', 'rule', 'inet', 'filter', 'input',
                     'iifname', 'br0', proto, 'dport', str(port),
                     'counter', action,
                     'comment', f'"Custom Rule {rule_id}"'
-                ], check=False)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    print(f"✗ Failed to add INPUT rule: {result.stderr}")
+                else:
+                    print(f"✓ Added INPUT rule for port {port}/{proto}")
                 
                 # If blocking, also add FORWARD rule (LAN -> Internet)
                 if action == 'drop':
@@ -591,40 +623,59 @@ def apply_custom_rule(rule_id, rule_data):
                     ], check=False)
                     
                     # Also block in OUTPUT chain (firewall itself)
-                    subprocess.run([
+                    result = subprocess.run([
                         'nft', 'add', 'rule', 'inet', 'filter', 'output',
                         'oifname', 'eth1', proto, 'dport', str(port),
                         'counter', 'drop',
                         'comment', f'"Custom Rule {rule_id} Output"'
-                    ], check=False)
+                    ], capture_output=True, text=True)
+                    
+                    if result.returncode != 0:
+                        print(f"✗ Failed to add OUTPUT rule: {result.stderr}")
             
-            if rule_data.get('accessTailnet') or rule_data.get('access_tailnet'):
+            if access_tailnet:
                 # Tailscale access - INPUT chain
-                subprocess.run([
+                result = subprocess.run([
                     'nft', 'add', 'rule', 'inet', 'filter', 'input',
                     proto, 'dport', str(port), 'ip', 'saddr', '100.64.0.0/10',
                     'counter', action,
                     'comment', f'"Custom Rule {rule_id}"'
-                ], check=False)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    print(f"✗ Failed to add Tailnet rule: {result.stderr}")
+                else:
+                    print(f"✓ Added Tailnet rule for port {port}/{proto}")
             
-            if rule_data.get('accessWan') or rule_data.get('access_wan'):
+            if access_wan:
                 # WAN access - INPUT chain (incoming from internet)
-                subprocess.run([
+                result = subprocess.run([
                     'nft', 'add', 'rule', 'inet', 'filter', 'input',
                     'iifname', 'eth1', proto, 'dport', str(port),
                     'counter', action,
                     'comment', f'"Custom Rule {rule_id}"'
-                ], check=False)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    print(f"✗ Failed to add WAN rule: {result.stderr}")
+                else:
+                    print(f"✓ Added WAN rule for port {port}/{proto}")
         
+        print(f"✓ Successfully applied rule {rule_id}")
         return True
     except Exception as e:
-        print(f"Error applying custom rule: {e}")
+        print(f"✗ Error applying custom rule: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def remove_custom_rule(rule_data):
     """Remove custom rule from nftables"""
     try:
         rule_id = rule_data.get('id')
+        print(f"Removing rule {rule_id} from nftables")
+        
+        removed_count = 0
         
         # Delete rules from INPUT chain
         result = subprocess.run([
@@ -635,10 +686,13 @@ def remove_custom_rule(rule_data):
             if f'Custom Rule {rule_id}' in line:
                 if '# handle' in line:
                     handle = line.split('# handle')[-1].strip()
-                    subprocess.run([
+                    result = subprocess.run([
                         'nft', 'delete', 'rule', 'inet', 'filter', 'input',
                         'handle', handle
-                    ], check=False)
+                    ], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        removed_count += 1
+                        print(f"  ✓ Removed INPUT rule (handle {handle})")
         
         # Delete rules from FORWARD chain
         result = subprocess.run([
@@ -649,10 +703,13 @@ def remove_custom_rule(rule_data):
             if f'Custom Rule {rule_id}' in line:
                 if '# handle' in line:
                     handle = line.split('# handle')[-1].strip()
-                    subprocess.run([
+                    result = subprocess.run([
                         'nft', 'delete', 'rule', 'inet', 'filter', 'forward',
                         'handle', handle
-                    ], check=False)
+                    ], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        removed_count += 1
+                        print(f"  ✓ Removed FORWARD rule (handle {handle})")
         
         # Delete rules from OUTPUT chain
         result = subprocess.run([
@@ -663,33 +720,54 @@ def remove_custom_rule(rule_data):
             if f'Custom Rule {rule_id}' in line:
                 if '# handle' in line:
                     handle = line.split('# handle')[-1].strip()
-                    subprocess.run([
+                    result = subprocess.run([
                         'nft', 'delete', 'rule', 'inet', 'filter', 'output',
                         'handle', handle
-                    ], check=False)
+                    ], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        removed_count += 1
+                        print(f"  ✓ Removed OUTPUT rule (handle {handle})")
         
+        print(f"✓ Removed {removed_count} nftables rules for rule {rule_id}")
         return True
     except Exception as e:
-        print(f"Error removing custom rule: {e}")
+        print(f"✗ Error removing custom rule: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def restore_custom_rules():
     """Restore all enabled custom rules from database on startup"""
     try:
+        print("=" * 60)
+        print("RESTORING CUSTOM RULES FROM DATABASE")
+        print("=" * 60)
+        
         conn = get_db()
         rules = conn.execute(
             'SELECT * FROM custom_rules WHERE enabled = 1'
         ).fetchall()
         
+        print(f"Found {len(rules)} enabled custom rules in database")
+        
         count = 0
         for rule in rules:
-            if apply_custom_rule(rule['id'], dict(rule)):
+            rule_dict = dict(rule)
+            print(f"\nRestoring rule {rule['id']}: {rule_dict['name']}")
+            if apply_custom_rule(rule['id'], rule_dict):
                 count += 1
+            else:
+                print(f"  ✗ Failed to restore rule {rule['id']}")
         
         conn.close()
-        print(f"✓ Restored {count} custom firewall rules from database")
+        print("=" * 60)
+        print(f"✓ Successfully restored {count}/{len(rules)} custom firewall rules")
+        print("=" * 60)
         return count
     except Exception as e:
+        print(f"✗ Error restoring custom rules: {e}")
+        import traceback
+        traceback.print_exc()
         print(f"⚠ Error restoring custom rules: {e}")
         return 0
 

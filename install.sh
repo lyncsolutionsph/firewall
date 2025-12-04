@@ -80,6 +80,81 @@ check_system() {
     fi
 }
 
+check_git_repository() {
+    print_header "Git Repository Check"
+    
+    # Get the directory where the script is located
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    
+    # Check if this is a git repository
+    if [[ -d "$SCRIPT_DIR/.git" ]]; then
+        print_info "Git repository detected"
+        
+        # Check if git is installed
+        if ! command -v git &> /dev/null; then
+            print_warning "Git not installed, skipping update check"
+            return 0
+        fi
+        
+        cd "$SCRIPT_DIR"
+        
+        # Check if there's a remote configured
+        if git remote -v | grep -q "origin"; then
+            print_info "Remote repository found"
+            
+            # Ask if user wants to check for updates
+            read -p "Check for updates from remote repository? (Y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                print_info "Fetching latest changes..."
+                
+                # Fetch from remote
+                if git fetch origin 2>/dev/null; then
+                    # Check if we're behind
+                    LOCAL=$(git rev-parse @)
+                    REMOTE=$(git rev-parse @{u} 2>/dev/null)
+                    
+                    if [[ -n "$REMOTE" ]] && [[ "$LOCAL" != "$REMOTE" ]]; then
+                        print_warning "Updates available from remote repository"
+                        read -p "Pull latest changes? (Y/n): " -n 1 -r
+                        echo
+                        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                            print_info "Pulling updates..."
+                            if git pull origin $(git branch --show-current) 2>/dev/null; then
+                                print_success "Repository updated successfully"
+                                print_info "Please re-run the installer with the updated files"
+                                exit 0
+                            else
+                                print_error "Failed to pull updates"
+                                read -p "Continue with current version? (y/N): " -n 1 -r
+                                echo
+                                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                                    print_info "Installation cancelled"
+                                    exit 0
+                                fi
+                            fi
+                        else
+                            print_info "Continuing with current version"
+                        fi
+                    else
+                        print_success "Repository is up to date"
+                    fi
+                else
+                    print_warning "Could not fetch from remote (check network connection)"
+                fi
+            else
+                print_info "Skipping update check"
+            fi
+        else
+            print_info "No remote repository configured"
+        fi
+    else
+        print_info "Not a git repository, skipping update check"
+    fi
+    
+    cd - > /dev/null
+}
+
 install_dependencies() {
     print_header "Installing Dependencies"
     
@@ -364,6 +439,7 @@ main() {
     echo ""
     check_root
     check_system
+    check_git_repository
     install_dependencies
     create_directories
     copy_files
