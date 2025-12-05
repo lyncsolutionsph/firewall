@@ -50,13 +50,13 @@ main() {
     print_success "Directory created and ownership set"
     echo ""
     
-    # Step 2: Copy files to /opt/seer and /etc
-    print_header "Step 2: Copying Files"
-    sudo cp "$SCRIPT_DIR/firewall/database.sql" /opt/seer/
-    print_success "Copied database.sql to /opt/seer/"
+    # Step 2: Move files to /opt/seer and /etc
+    print_header "Step 2: Moving Files"
+    sudo mv "$SCRIPT_DIR/firewall/database.sql" /opt/seer/
+    print_success "Moved database.sql to /opt/seer/"
     
-    sudo cp "$SCRIPT_DIR/firewall/api.py" /opt/seer/
-    print_success "Copied api.py to /opt/seer/"
+    sudo mv "$SCRIPT_DIR/firewall/api.py" /opt/seer/
+    print_success "Moved api.py to /opt/seer/"
     
     sudo cp "$SCRIPT_DIR/firewall/nftables.conf" /etc/nftables.conf
     print_success "Copied nftables.conf to /etc/nftables.conf"
@@ -64,8 +64,8 @@ main() {
     sudo cp "$SCRIPT_DIR/firewall/nftables.conf" /etc/nftables.conf.template
     print_success "Copied nftables.conf to /etc/nftables.conf.template"
     
-    sudo cp "$SCRIPT_DIR/firewall/seer-firewall.service" /etc/systemd/system/
-    print_success "Copied seer-firewall.service to /etc/systemd/system/"
+    sudo mv "$SCRIPT_DIR/firewall/seer-firewall.service" /etc/systemd/system/
+    print_success "Moved seer-firewall.service to /etc/systemd/system/"
     echo ""
     
     # Step 3: Setup Python virtual environment
