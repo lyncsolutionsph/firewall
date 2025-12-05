@@ -12,18 +12,15 @@ The SEER Firewall system provides a centralized firewall management interface us
 ### Automated Install (Recommended)
 
 ```bash
-# 1. Create installation directory
-sudo mkdir -p /opt/seer
-sudo chown $USER:$USER /opt/seer
-
-# 2. Clone the repository
+# 1. Clone the repository
 git clone https://github.com/lyncsolutionsph/firewall
 
-# 3. Navigate to directory
+# 2. Navigate to directory
 cd firewall
 
-# 4. Run installer
-sudo ./install.sh
+# 3. Make installer executable and run it
+chmod +x install.sh
+sudo bash install.sh
 ```
 
 The installation script will automatically:
@@ -44,10 +41,11 @@ sudo mkdir -p /opt/seer
 sudo chown $USER:$USER /opt/seer
 ```
 
-**Step 2:** Clone repository
+**Step 2:** Clone repository and make scripts executable
 ```bash
 git clone https://github.com/lyncsolutionsph/firewall
 cd firewall
+chmod +x *.sh
 ```
 
 **Step 3:** Copy files
