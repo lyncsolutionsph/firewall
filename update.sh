@@ -202,14 +202,14 @@ update_files() {
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     
     # Update Python API
-    if [[ -f "$SCRIPT_DIR/api.py" ]]; then
-        sudo cp "$SCRIPT_DIR/api.py" "$INSTALL_DIR/"
+    if [[ -f "$SCRIPT_DIR/firewall/api.py" ]]; then
+        sudo cp "$SCRIPT_DIR/firewall/api.py" "$INSTALL_DIR/"
         print_success "Updated api.py"
     fi
     
     # Update database schema (if needed)
-    if [[ -f "$SCRIPT_DIR/database.sql" ]]; then
-        sudo cp "$SCRIPT_DIR/database.sql" "$INSTALL_DIR/"
+    if [[ -f "$SCRIPT_DIR/firewall/database.sql" ]]; then
+        sudo cp "$SCRIPT_DIR/firewall/database.sql" "$INSTALL_DIR/"
         print_success "Updated database.sql"
     fi
 }
@@ -235,7 +235,7 @@ update_nftables_config() {
     
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     
-    if [[ -f "$SCRIPT_DIR/nftables.conf" ]]; then
+    if [[ -f "$SCRIPT_DIR/firewall/nftables.conf" ]]; then
         read -p "Update /etc/nftables.conf? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -243,8 +243,8 @@ update_nftables_config() {
             sudo cp /etc/nftables.conf /etc/nftables.conf.backup.$(date +%Y%m%d_%H%M%S)
             print_success "Backed up current nftables.conf"
             
-            sudo cp "$SCRIPT_DIR/nftables.conf" "/etc/nftables.conf"
-            sudo cp "$SCRIPT_DIR/nftables.conf" "/etc/nftables.conf.template"
+            sudo cp "$SCRIPT_DIR/firewall/nftables.conf" "/etc/nftables.conf"
+            sudo cp "$SCRIPT_DIR/firewall/nftables.conf" "/etc/nftables.conf.template"
             print_success "Updated nftables.conf and template"
             
             print_info "Reloading firewall..."

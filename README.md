@@ -50,11 +50,11 @@ chmod +x *.sh
 
 **Step 3:** Copy files
 ```bash
-sudo cp database.sql /opt/seer/
-sudo cp api.py /opt/seer/
-sudo cp nftables.conf /etc/nftables.conf
-sudo cp nftables.conf /etc/nftables.conf.template
-sudo cp seer-firewall.service /etc/systemd/system/
+sudo cp firewall/database.sql /opt/seer/
+sudo cp firewall/api.py /opt/seer/
+sudo cp firewall/nftables.conf /etc/nftables.conf
+sudo cp firewall/nftables.conf /etc/nftables.conf.template
+sudo cp firewall/seer-firewall.service /etc/systemd/system/
 ```
 
 **Step 4:** Setup Python environment
@@ -105,7 +105,24 @@ sudo systemctl restart seer-firewall.service
 sudo systemctl stop seer-firewall.service
 ```
 
-## File Locations
+## Repository Structure
+
+```
+firewall/
+├── firewall/              # Core application files
+│   ├── api.py            # Flask API backend
+│   ├── database.sql      # Database schema
+│   ├── nftables.conf     # Firewall configuration
+│   └── seer-firewall.service  # Systemd service file
+├── install.sh            # Installation script
+├── update.sh             # Update script
+├── uninstall.sh          # Uninstallation script
+├── version.txt           # Version number
+├── README.md             # This file
+└── DEPLOYMENT.md         # Deployment guide
+```
+
+## File Locations (After Installation)
 
 | File | Location | Purpose |
 |------|----------|---------|

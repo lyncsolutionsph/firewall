@@ -52,19 +52,19 @@ main() {
     
     # Step 2: Copy files to /opt/seer and /etc
     print_header "Step 2: Copying Files"
-    sudo cp "$SCRIPT_DIR/database.sql" /opt/seer/
+    sudo cp "$SCRIPT_DIR/firewall/database.sql" /opt/seer/
     print_success "Copied database.sql to /opt/seer/"
     
-    sudo cp "$SCRIPT_DIR/api.py" /opt/seer/
+    sudo cp "$SCRIPT_DIR/firewall/api.py" /opt/seer/
     print_success "Copied api.py to /opt/seer/"
     
-    sudo cp "$SCRIPT_DIR/nftables.conf" /etc/nftables.conf
+    sudo cp "$SCRIPT_DIR/firewall/nftables.conf" /etc/nftables.conf
     print_success "Copied nftables.conf to /etc/nftables.conf"
     
-    sudo cp "$SCRIPT_DIR/nftables.conf" /etc/nftables.conf.template
+    sudo cp "$SCRIPT_DIR/firewall/nftables.conf" /etc/nftables.conf.template
     print_success "Copied nftables.conf to /etc/nftables.conf.template"
     
-    sudo cp "$SCRIPT_DIR/seer-firewall.service" /etc/systemd/system/
+    sudo cp "$SCRIPT_DIR/firewall/seer-firewall.service" /etc/systemd/system/
     print_success "Copied seer-firewall.service to /etc/systemd/system/"
     echo ""
     
