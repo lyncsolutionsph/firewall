@@ -103,6 +103,13 @@ main() {
     sudo systemctl status seer-firewall.service --no-pager
     echo ""
     
+    # Step 7: Cleanup
+    print_header "Step 7: Cleanup"
+    cd ~
+    rm -rf "$SCRIPT_DIR"
+    print_success "Removed cloned repository"
+    echo ""
+    
     # Summary
     print_header "Installation Complete!"
     echo ""
