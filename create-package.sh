@@ -27,11 +27,9 @@ REQUIRED_FILES=(
     "uninstall.sh"
     "update.sh"
     "api.py"
-    "index.html"
-    "index.css"
-    "index.js"
     "database.sql"
     "nftables.conf"
+    "seer-firewall.service"
 )
 
 echo "Checking required files..."
@@ -67,11 +65,13 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 
-# Copy README if exists
-if [[ -f "README.md" ]]; then
-    cp "README.md" "$PACKAGE_DIR/"
-    echo -e "${GREEN}✓${NC} Copied README.md"
-fi
+# Copy README and documentation if exists
+for doc in README.md DEPLOYMENT.md; do
+    if [[ -f "$doc" ]]; then
+        cp "$doc" "$PACKAGE_DIR/"
+        echo -e "${GREEN}✓${NC} Copied $doc"
+    fi
+done
 
 # Create version file
 echo "$VERSION" > "$PACKAGE_DIR/VERSION"

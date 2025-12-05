@@ -2,7 +2,7 @@
 
 ###############################################################################
 # SEER Firewall Management System - Uninstaller Script
-# Version: 1.0.0
+# Version: 2.0.0
 # Description: Removes SEER firewall management system from the device
 ###############################################################################
 
@@ -14,10 +14,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="/opt/seer-firewall"
+INSTALL_DIR="/opt/seer"
 SERVICE_NAME="seer-firewall"
-DB_DIR="/home/admin/.node-red/seer_database"
-DB_FILE="$DB_DIR/seer.db"
 
 # Functions
 print_header() {
@@ -83,52 +81,16 @@ remove_installation() {
     print_header "Removing Installation Files"
     
     if [[ -d "$INSTALL_DIR" ]]; then
+        # Backup database.sql if it exists
+        if [[ -f "$INSTALL_DIR/database.sql" ]]; then
+            cp "$INSTALL_DIR/database.sql" "$HOME/database.sql.backup.$(date +%Y%m%d_%H%M%S)"
+            print_success "Backed up database.sql"
+        fi
+        
         rm -rf "$INSTALL_DIR"
         print_success "Removed $INSTALL_DIR"
     else
         print_info "Installation directory not found"
-    fi
-}
-
-backup_database() {
-    print_header "Database Backup"
-    
-    if [[ -f "$DB_FILE" ]]; then
-        read -p "Do you want to backup the database before removal? (Y/n): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            BACKUP_FILE="$HOME/seer-database-backup-$(date +%Y%m%d_%H%M%S).db"
-            cp "$DB_FILE" "$BACKUP_FILE"
-            print_success "Database backed up to: $BACKUP_FILE"
-            return 0
-        else
-            print_info "Skipping database backup"
-            return 1
-        fi
-    else
-        print_info "Database not found"
-        return 1
-    fi
-}
-
-remove_database() {
-    print_header "Removing Database"
-    
-    read -p "Do you want to remove the database (including all firewall rules)? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [[ -f "$DB_FILE" ]]; then
-            rm "$DB_FILE"
-            print_success "Database removed"
-        fi
-        
-        # Remove directory if empty
-        if [[ -d "$DB_DIR" ]] && [[ -z "$(ls -A $DB_DIR)" ]]; then
-            rm -rf "$DB_DIR"
-            print_success "Removed empty database directory"
-        fi
-    else
-        print_info "Keeping database at: $DB_FILE"
     fi
 }
 
@@ -144,6 +106,13 @@ remove_nftables_config() {
             cp /etc/nftables.conf "$BACKUP_FILE"
             print_success "Backed up nftables.conf to: $BACKUP_FILE"
             
+            # Also backup template if it exists
+            if [[ -f /etc/nftables.conf.template ]]; then
+                cp /etc/nftables.conf.template "$BACKUP_FILE.template"
+                rm /etc/nftables.conf.template
+                print_success "Removed nftables.conf.template"
+            fi
+            
             rm /etc/nftables.conf
             print_success "Removed /etc/nftables.conf"
             print_warning "You will need to reconfigure your firewall!"
@@ -152,38 +121,6 @@ remove_nftables_config() {
         fi
     else
         print_info "Keeping nftables configuration"
-    fi
-}
-
-clean_custom_rules() {
-    print_header "Cleaning Custom Firewall Rules"
-    
-    print_info "Removing custom rules from nftables..."
-    
-    # Try to remove custom rules by comment
-    nft list ruleset | grep "Custom Rule" | wc -l | read RULE_COUNT
-    
-    if [[ -n "$RULE_COUNT" ]] && [[ "$RULE_COUNT" -gt 0 ]]; then
-        print_warning "Found $RULE_COUNT custom rules in nftables"
-        read -p "Remove these rules? (Y/n): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            # Remove rules from all chains
-            for chain in input forward output; do
-                while true; do
-                    HANDLE=$(nft -a list chain inet filter $chain 2>/dev/null | grep "Custom Rule" | head -1 | grep -oP 'handle \K[0-9]+')
-                    if [[ -z "$HANDLE" ]]; then
-                        break
-                    fi
-                    nft delete rule inet filter $chain handle $HANDLE 2>/dev/null
-                done
-            done
-            print_success "Custom rules removed from nftables"
-        else
-            print_info "Keeping custom rules in nftables"
-        fi
-    else
-        print_info "No custom rules found in nftables"
     fi
 }
 
@@ -198,13 +135,9 @@ print_summary() {
     echo "  ✓ Service: ${SERVICE_NAME}"
     echo "  ✓ Installation directory: $INSTALL_DIR"
     
-    if [[ -f "$DB_FILE" ]]; then
+    if [[ -f /etc/nftables.conf ]]; then
         echo ""
         echo -e "${YELLOW}Preserved:${NC}"
-        echo "  • Database: $DB_FILE"
-    fi
-    
-    if [[ -f /etc/nftables.conf ]]; then
         echo "  • Firewall config: /etc/nftables.conf"
     fi
     
@@ -230,21 +163,12 @@ main() {
     echo ""
     check_root
     
-    # Backup database before any changes
-    backup_database
-    
     # Stop and remove service
     stop_service
     remove_service
     
-    # Clean up custom rules from firewall
-    clean_custom_rules
-    
     # Remove installation
     remove_installation
-    
-    # Ask about database
-    remove_database
     
     # Ask about nftables config
     remove_nftables_config

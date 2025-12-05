@@ -22,18 +22,16 @@ echo "Checking required files..."
 # Core files
 CORE_FILES=(
     "api.py:Python API backend"
-    "index.html:Web interface HTML"
-    "index.css:Web interface styles"
-    "index.js:Web interface JavaScript"
     "database.sql:Database schema"
     "nftables.conf:Firewall configuration"
+    "seer-firewall.service:Systemd service file"
 )
 
 # Scripts
 SCRIPT_FILES=(
     "install.sh:Installation script"
     "uninstall.sh:Uninstallation script"
-    "update.sh:Git update script"
+    "update.sh:Update script"
     "create-package.sh:Package creator"
 )
 

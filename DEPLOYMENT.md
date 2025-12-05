@@ -1,127 +1,102 @@
 # SEER Firewall Deployment Guide
 
-## Quick Start for Device Updates
+## Overview
 
-This guide is for deploying SEER Firewall Management System to multiple Raspberry Pi devices.
+This guide covers deploying the SEER Firewall Management System to one or multiple devices. The system is designed for easy installation via Git clone or package deployment.
 
 ---
 
-## Method 1: Package Deployment (Recommended)
+## Method 1: Direct Git Clone (Recommended)
+
+### Single Device Installation
+
+The simplest method for deploying to a single device:
+
+```bash
+# SSH into target device
+ssh admin@<device-ip>
+
+# Create installation directory
+sudo mkdir -p /opt/seer
+sudo chown $USER:$USER /opt/seer
+
+# Clone repository
+git clone https://github.com/lyncsolutionsph/firewall
+
+# Install
+cd firewall
+sudo ./install.sh
+```
+
+### Verify Installation
+
+```bash
+# Check service status
+sudo systemctl status seer-firewall.service
+
+# View logs
+sudo journalctl -u seer-firewall.service -f
+
+# Test API
+curl http://localhost:5000/api/status
+```
+
+---
+
+## Method 2: Package Deployment
+
+For deploying to multiple devices or offline installations.
 
 ### Step 1: Create Distribution Package
 
-On your development machine (where you have all the files):
+On your development machine:
 
 ```bash
-# Make the package creator executable
-chmod +x create-package.sh
+# Clone repository (if not already)
+git clone https://github.com/lyncsolutionsph/firewall
+cd firewall
 
-# Create the distribution package
-./create-package.sh
+# Create package (optional - can also just zip the repo)
+tar -czf seer-firewall.tar.gz \
+  install.sh uninstall.sh update.sh \
+  api.py database.sql nftables.conf \
+  seer-firewall.service \
+  README.md DEPLOYMENT.md
 ```
-
-This creates `seer-firewall-1.0.0.tar.gz` containing everything needed.
 
 ### Step 2: Transfer to Target Device
 
 ```bash
-# Replace <device-ip> with the Raspberry Pi's IP address
-scp seer-firewall-1.0.0.tar.gz admin@<device-ip>:~/
-```
+# Via SCP
+scp seer-firewall.tar.gz admin@<device-ip>:~/
 
-Example:
-```bash
-scp seer-firewall-1.0.0.tar.gz admin@192.168.50.10:~/
+# Or copy to USB drive
+cp seer-firewall.tar.gz /media/usb/
 ```
 
 ### Step 3: Install on Target Device
 
 ```bash
-# SSH into the device
+# SSH into device
 ssh admin@<device-ip>
 
-# Extract the package
-tar -xzf seer-firewall-1.0.0.tar.gz
-cd seer-firewall-1.0.0/
+# Extract package
+tar -xzf seer-firewall.tar.gz
+cd firewall/
 
 # Run installer
 sudo ./install.sh
 ```
 
-### Step 4: Verify Installation
-
-```bash
-# Check service status
-sudo systemctl status seer-firewall
-
-# View logs
-sudo journalctl -u seer-firewall -n 50
-
-# Test API
-curl http://localhost:5000/api/rules
-```
-
-### Step 5: Access Web Interface
-
-Open browser: `http://<device-ip>:5000/`
-
 ---
 
-## Method 2: USB/SD Card Deployment
+## Method 3: Bulk Deployment
 
-### Step 1: Create Package
-
-```bash
-./create-package.sh
-```
-
-### Step 2: Copy to USB Drive
-
-```bash
-# Mount USB drive and copy
-cp seer-firewall-1.0.0.tar.gz /media/usb/
-```
-
-### Step 3: Install from USB on Target Device
-
-```bash
-# Insert USB on Raspberry Pi
-# Mount (usually auto-mounted at /media/pi/<drive-name>)
-
-# Copy to home
-cp /media/pi/<drive-name>/seer-firewall-1.0.0.tar.gz ~/
-
-# Extract and install
-tar -xzf seer-firewall-1.0.0.tar.gz
-cd seer-firewall-1.0.0/
-sudo ./install.sh
-```
-
----
-
-## Method 3: Direct File Copy (Development)
-
-For quick updates during development:
-
-```bash
-# Copy individual files
-scp api.py admin@<device-ip>:/opt/seer-firewall/
-scp index.html admin@<device-ip>:/opt/seer-firewall/static/
-scp index.css admin@<device-ip>:/opt/seer-firewall/static/
-scp index.js admin@<device-ip>:/opt/seer-firewall/static/
-
-# Restart service
-ssh admin@<device-ip> 'sudo systemctl restart seer-firewall'
-```
-
----
-
-## Bulk Deployment Script
-
-For deploying to multiple devices, create `deploy-all.sh`:
+For deploying to multiple devices, create a deployment script:
 
 ```bash
 #!/bin/bash
+# deploy-multiple.sh
 
 # List of device IPs
 DEVICES=(
@@ -130,25 +105,29 @@ DEVICES=(
     "192.168.50.12"
 )
 
-PACKAGE="seer-firewall-1.0.0.tar.gz"
 USER="admin"
+REPO_URL="https://github.com/lyncsolutionsph/firewall"
 
 for device in "${DEVICES[@]}"; do
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Deploying to: $device"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    # Transfer package
-    echo "→ Transferring package..."
-    scp -q "$PACKAGE" ${USER}@${device}:~/
-    
-    # Install
-    echo "→ Installing..."
-    ssh ${USER}@${device} << 'ENDSSH'
-        cd ~
-        tar -xzf seer-firewall-*.tar.gz
-        cd seer-firewall-*/
-        sudo ./install.sh <<< 'y'
+    ssh ${USER}@${device} << ENDSSH
+        # Create directory
+        sudo mkdir -p /opt/seer
+        sudo chown \$USER:\$USER /opt/seer
+        
+        # Clone repository
+        if [ ! -d "firewall" ]; then
+            git clone ${REPO_URL}
+        else
+            cd firewall && git pull && cd ..
+        fi
+        
+        # Install
+        cd firewall
+        sudo ./install.sh
 ENDSSH
     
     echo "✓ Deployment to $device complete"
@@ -157,53 +136,64 @@ done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "All deployments complete!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ```
 
 Usage:
 ```bash
-chmod +x deploy-all.sh
-./deploy-all.sh
+chmod +x deploy-multiple.sh
+./deploy-multiple.sh
 ```
 
 ---
 
-## Update Existing Installation
+## Updating Existing Installation
 
-To update an already-installed system:
+### Using Update Script
 
 ```bash
-# On the device
-cd ~/seer-firewall-1.0.0/
+# SSH into device
+ssh admin@<device-ip>
 
+# Navigate to repository
+cd firewall
+
+# Pull latest changes
+git pull origin main
+
+# Run update script
+sudo ./update.sh
+```
+
+### Manual Update
+
+```bash
 # Stop service
-sudo systemctl stop seer-firewall
+sudo systemctl stop seer-firewall.service
 
-# Backup database
-cp /home/admin/.node-red/seer_database/seer.db ~/seer-backup.db
-
-# Copy updated files
-sudo cp api.py /opt/seer-firewall/
-sudo cp static/* /opt/seer-firewall/static/
+# Update files
+cd firewall
+git pull
+sudo cp api.py /opt/seer/
+sudo cp database.sql /opt/seer/
+sudo cp nftables.conf /etc/nftables.conf
 
 # Restart service
-sudo systemctl restart seer-firewall
+sudo systemctl restart seer-firewall.service
 ```
 
 ---
 
 ## Pre-Deployment Checklist
 
-Before deploying to devices:
+Before deploying to production devices:
 
-- [ ] Test on development device
-- [ ] Verify all custom rules work
+- [ ] Test installation on development/test device
+- [ ] Verify API responds correctly
+- [ ] Check firewall rules are loading properly
 - [ ] Backup existing configurations
 - [ ] Document any custom network settings
-- [ ] Test rollback procedure
-- [ ] Verify database migrations
-- [ ] Check firewall rule syntax
-- [ ] Test from LAN, Tailscale, and WAN (if applicable)
+- [ ] Ensure git repository is accessible (or package is ready)
+- [ ] Test from expected client networks
 
 ---
 
@@ -212,45 +202,46 @@ Before deploying to devices:
 After installing on each device:
 
 ```bash
-# Check service
-sudo systemctl status seer-firewall
+# 1. Check service is running
+sudo systemctl status seer-firewall.service
 
-# Check database
-sqlite3 /home/admin/.node-red/seer_database/seer.db "SELECT COUNT(*) FROM policy_rules;"
+# 2. Verify API responds
+curl http://localhost:5000/api/status
 
-# Check firewall
+# 3. Check firewall rules loaded
 sudo nft list ruleset | head -20
 
-# Test web access (from browser)
-http://<device-ip>:5000/
-
-# Test API
-curl http://<device-ip>:5000/api/rules
+# 4. View service logs
+sudo journalctl -u seer-firewall.service -n 20
 ```
 
 ---
 
 ## Rollback Procedure
 
-If something goes wrong:
+If deployment fails or needs to be reverted:
+
+### Using Uninstaller
 
 ```bash
-# Method 1: Use uninstaller
-cd ~/seer-firewall-1.0.0/
+cd firewall
 sudo ./uninstall.sh
+```
 
-# Method 2: Manual cleanup
-sudo systemctl stop seer-firewall
-sudo systemctl disable seer-firewall
+### Manual Rollback
+
+```bash
+# Stop and remove service
+sudo systemctl stop seer-firewall.service
+sudo systemctl disable seer-firewall.service
 sudo rm /etc/systemd/system/seer-firewall.service
-sudo rm -rf /opt/seer-firewall
 sudo systemctl daemon-reload
 
-# Restore database backup
-cp ~/seer-backup.db /home/admin/.node-red/seer_database/seer.db
+# Remove installation
+sudo rm -rf /opt/seer
 
-# Restore nftables config
-sudo cp /tmp/nftables-backup-*.conf /etc/nftables.conf
+# Restore nftables config (if backed up)
+sudo cp /etc/nftables.conf.backup /etc/nftables.conf
 sudo systemctl restart nftables
 ```
 
@@ -258,117 +249,102 @@ sudo systemctl restart nftables
 
 ## Troubleshooting Deployment Issues
 
-### Package transfer fails
+### SSH Connection Fails
 ```bash
-# Check SSH access
+# Test SSH connectivity
 ssh admin@<device-ip> 'echo "SSH works"'
 
 # Check network connectivity
 ping <device-ip>
 
 # Use verbose mode
-scp -v seer-firewall-1.0.0.tar.gz admin@<device-ip>:~/
+ssh -v admin@<device-ip>
 ```
 
-### Installation fails
+### Git Clone Fails
+```bash
+# Check internet connectivity on device
+ssh admin@<device-ip> 'ping -c 3 github.com'
+
+# Try HTTPS vs SSH URL
+git clone https://github.com/lyncsolutionsph/firewall
+```
+
+### Installation Script Fails
 ```bash
 # Check logs
 sudo journalctl -xe
 
-# Verify permissions
-ls -la /opt/seer-firewall
+# Verify permissions on /opt/seer
+ls -la /opt/seer
 
 # Check Python environment
-/opt/seer-firewall/venv/bin/python3 --version
+/opt/seer/venv/bin/python3 --version
 
-# Manually run installer steps
-cd ~/seer-firewall-1.0.0
-cat install.sh  # Review what failed
+# Run installer with verbose output
+sudo bash -x ./install.sh
 ```
 
-### Service won't start
+### Service Won't Start
 ```bash
 # Check detailed logs
-sudo journalctl -u seer-firewall -n 100
+sudo journalctl -u seer-firewall.service -n 100 --no-pager
 
 # Test API manually
-cd /opt/seer-firewall
-./venv/bin/python3 api.py
+cd /opt/seer
+source venv/bin/activate
+python3 api.py
 
 # Check port availability
-sudo netstat -tulpn | grep 5000
+sudo ss -tulpn | grep 5000
 ```
 
-### Database errors
+### Firewall Rules Not Loading
 ```bash
-# Verify database exists
-ls -la /home/admin/.node-red/seer_database/seer.db
+# Check nftables service
+sudo systemctl status nftables
 
-# Check schema
-sqlite3 /home/admin/.node-red/seer_database/seer.db ".schema"
+# Verify config syntax
+sudo nft -c -f /etc/nftables.conf
 
-# Reinitialize if needed
-cd /opt/seer-firewall
-sqlite3 /home/admin/.node-red/seer_database/seer.db < database.sql
+# View current ruleset
+sudo nft list ruleset
 ```
 
 ---
 
-## Network-Specific Configuration
+## Maintenance & Monitoring
 
-If devices have different network configurations:
-
-### Edit before deployment:
-
-**nftables.conf**:
-```bash
-# Update interface names
-define WAN_IF = "eth1"      # Change if different
-define LAN_IF = "br0"       # Change if different
-
-# Update network ranges
-define LAN_NET = "192.168.50.0/24"  # Change to match
-define TAILNET = "100.64.0.0/10"    # Usually same
-```
-
-**api.py** (if needed):
-```python
-# Line ~40: Update database path if different
-DB_PATH = '/home/admin/.node-red/seer_database/seer.db'
-```
-
----
-
-## Support & Maintenance
-
-### Regular Maintenance Tasks
+### Regular Maintenance
 
 ```bash
-# Weekly: Check logs for errors
-sudo journalctl -u seer-firewall --since "7 days ago" | grep -i error
+# Update system packages
+sudo apt update && sudo apt upgrade -y
 
-# Monthly: Backup database
-cp /home/admin/.node-red/seer_database/seer.db \
-   ~/backups/seer-$(date +%Y%m%d).db
+# Update SEER Firewall
+cd firewall && git pull && sudo ./update.sh
 
-# As needed: Update rules
-# Use web interface or API
+# Check service health
+sudo systemctl status seer-firewall.service
+
+# Review logs for errors
+sudo journalctl -u seer-firewall.service --since "7 days ago" | grep -i error
 ```
 
-### Monitoring
+### Monitoring Commands
 
 ```bash
-# Service uptime
-systemctl show seer-firewall --property=ActiveState,SubState
+# Check service status
+systemctl is-active seer-firewall.service
 
-# API response
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/rules
+# API health check
+curl -s http://localhost:5000/api/status
 
-# Database size
-du -h /home/admin/.node-red/seer_database/seer.db
+# View active connections
+sudo ss -tunap | grep :5000
 
-# Firewall rule count
-sudo nft list ruleset | grep -c "Custom Rule"
+# Firewall statistics
+sudo nft list ruleset -a
 ```
 
 ---
@@ -377,32 +353,25 @@ sudo nft list ruleset | grep -c "Custom Rule"
 
 | Task | Command |
 |------|---------|
-| Create package | `./create-package.sh` |
-| Transfer to device | `scp package.tar.gz admin@<ip>:~/` |
-| Extract | `tar -xzf package.tar.gz` |
-| Install | `cd package/ && sudo ./install.sh` |
-| Check status | `sudo systemctl status seer-firewall` |
-| View logs | `sudo journalctl -u seer-firewall -f` |
-| Restart | `sudo systemctl restart seer-firewall` |
-| Uninstall | `sudo ./uninstall.sh` |
-| Web UI | `http://<device-ip>:5000/` |
+| Clone repository | `git clone https://github.com/lyncsolutionsph/firewall` |
+| Install | `cd firewall && sudo ./install.sh` |
+| Update | `cd firewall && git pull && sudo ./update.sh` |
+| Uninstall | `cd firewall && sudo ./uninstall.sh` |
+| Check status | `sudo systemctl status seer-firewall.service` |
+| View logs | `sudo journalctl -u seer-firewall.service -f` |
+| Restart | `sudo systemctl restart seer-firewall.service` |
+| Test API | `curl http://localhost:5000/api/status` |
 
 ---
 
-## Version Control
+## Best Practices
 
-Keep track of deployments:
-
-```bash
-# Create deployment log
-cat >> deployment-log.txt << EOF
-Date: $(date)
-Version: 1.0.0
-Device: <device-ip>
-Status: Success
-Notes: Initial deployment
-EOF
-```
+1. **Test First**: Always test on a non-production device first
+2. **Backup Configs**: Keep backups of custom configurations
+3. **Document Changes**: Track what was modified and when
+4. **Monitor Logs**: Regularly check logs for errors
+5. **Keep Updated**: Pull latest changes from repository regularly
+6. **Network Isolation**: Ensure API is not exposed to untrusted networks
 
 ---
 

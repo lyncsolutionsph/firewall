@@ -1,231 +1,248 @@
-# SEER Firewall - Installation & Setup
+# SEER Firewall Management System
 
 ## Overview
-The SEER Firewall system uses:
-- **SQLite database** to store rule states (persists after reboot)
-- **Python Flask API** to handle toggle operations
-- **nftables** for actual firewall rules
-- **Node-RED UI** for the web interface
+The SEER Firewall system provides a centralized firewall management interface using:
+- **nftables** - Modern Linux firewall framework
+- **Python Flask API** - Backend service for rule management
+- **SQLite database** - Persistent rule state storage (optional, for future enhancements)
+- **Systemd service** - Automatic startup and service management
 
-## Installation Steps
+## Quick Installation
 
-### 1. Install Dependencies
+### Automated Install (Recommended)
+
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-pip sqlite3 nftables
-sudo pip3 install flask flask-cors
+# 1. Create installation directory
+sudo mkdir -p /opt/seer
+sudo chown $USER:$USER /opt/seer
+
+# 2. Clone the repository
+git clone https://github.com/lyncsolutionsph/firewall
+
+# 3. Navigate to directory
+cd firewall
+
+# 4. Run installer
+sudo ./install.sh
 ```
 
-### 2. Create Application Directory
+The installation script will automatically:
+- Copy required files to `/opt/seer`
+- Install system dependencies (python3-venv)
+- Set up Python virtual environment
+- Install Flask and Flask-CORS
+- Configure systemd service
+- Start the firewall API service
+
+### Manual Installation Steps
+
+If you prefer to install manually:
+
+**Step 1:** Create installation directory
 ```bash
 sudo mkdir -p /opt/seer
 sudo chown $USER:$USER /opt/seer
 ```
 
-### 3. Copy Files
+**Step 2:** Clone repository
 ```bash
-# Copy all files to /opt/seer/
+git clone https://github.com/lyncsolutionsph/firewall
+cd firewall
+```
+
+**Step 3:** Copy files
+```bash
 sudo cp database.sql /opt/seer/
 sudo cp api.py /opt/seer/
 sudo cp nftables.conf /etc/nftables.conf
 sudo cp nftables.conf /etc/nftables.conf.template
+sudo cp seer-firewall.service /etc/systemd/system/
 ```
 
-### 4. Initialize Database
+**Step 4:** Setup Python environment
 ```bash
 cd /opt/seer
-sqlite3 firewall.db < database.sql
+sudo apt install python3-venv -y
+python3 -m venv venv
+source venv/bin/activate
+pip install flask flask-cors
+deactivate
 ```
 
-### 5. Set Permissions
+**Step 5:** Enable and start service
 ```bash
-sudo chown root:root /etc/nftables.conf
-sudo chmod 644 /etc/nftables.conf
-sudo chown root:root /opt/seer/firewall.db
-sudo chmod 644 /opt/seer/firewall.db
-```
-
-### 6. Install Systemd Service
-```bash
-sudo cp seer-firewall.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable seer-firewall.service
 sudo systemctl start seer-firewall.service
 ```
 
-### 7. Check Service Status
+**Step 6:** Verify installation
 ```bash
 sudo systemctl status seer-firewall.service
 ```
 
-### 8. Enable nftables on Boot
+## System Architecture
+
+### How It Works
+
+The SEER Firewall runs as a systemd service that:
+1. Starts automatically on boot
+2. Runs Python Flask API on port 5000
+3. Manages nftables firewall rules
+4. Provides REST API for rule management
+
+### Service Management
+
 ```bash
-sudo systemctl enable nftables.service
-sudo systemctl start nftables.service
+# Check service status
+sudo systemctl status seer-firewall.service
+
+# View live logs
+sudo journalctl -u seer-firewall.service -f
+
+# Restart service
+sudo systemctl restart seer-firewall.service
+
+# Stop service
+sudo systemctl stop seer-firewall.service
 ```
 
-## How It Works
+## File Locations
 
-### Toggle a Rule
-1. User clicks ON/OFF toggle in web interface
-2. JavaScript sends POST request to API: `/api/rules/{id}/toggle`
-3. API updates SQLite database (rule_enabled or nat_enabled field)
-4. API regenerates nftables.conf from database
-5. API reloads nftables with: `nft -f /etc/nftables.conf`
-6. Changes persist after reboot
-
-### Rule State Persistence
-- **SQLite database** stores: `rule_enabled` (0=disabled, 1=enabled)
-- On system boot:
-  1. Systemd starts `seer-firewall.service`
-  2. API reads database
-  3. Generates nftables.conf with only enabled rules
-  4. Applies configuration
-
-### Database Schema
-```sql
-policy_rules
-  - id: Rule ID
-  - policy: Rule name
-  - rule_enabled: 0 (disabled) or 1 (enabled)
-  - nat_enabled: 0 (NAT off) or 1 (NAT on)
-  - updated_at: Last change timestamp
-```
+| File | Location | Purpose |
+|------|----------|---------|
+| API Backend | `/opt/seer/api.py` | Flask API service |
+| Database Schema | `/opt/seer/database.sql` | SQLite schema |
+| Python Environment | `/opt/seer/venv/` | Virtual environment |
+| Firewall Config | `/etc/nftables.conf` | Active nftables rules |
+| Config Template | `/etc/nftables.conf.template` | Backup template |
+| Service File | `/etc/systemd/system/seer-firewall.service` | Systemd unit |
 
 ## API Endpoints
 
-### Get All Rules
+The Flask API provides the following endpoints:
+
+### Status Check
+```bash
+GET http://localhost:5000/api/status
 ```
+
+### Get All Rules
+```bash
 GET http://localhost:5000/api/rules
 ```
 
 ### Toggle Rule
-```
+```bash
 POST http://localhost:5000/api/rules/{id}/toggle
-Body: {
-  "field": "rule_enabled",  // or "nat_enabled"
-  "value": 1  // 0 = OFF, 1 = ON
+Content-Type: application/json
+
+{
+  "field": "rule_enabled",
+  "value": 1
 }
 ```
 
-### Get Blacklist
-```
-GET http://localhost:5000/api/blacklist
-```
+## Testing the Installation
 
-### Add to Blacklist
-```
-POST http://localhost:5000/api/blacklist
-Body: {
-  "ip_address": "192.168.1.100",
-  "reason": "Suspicious activity"
-}
-```
-
-### Remove from Blacklist
-```
-DELETE http://localhost:5000/api/blacklist/{id}
-```
-
-### Get Status
-```
-GET http://localhost:5000/api/status
-```
-
-### Get Audit Log
-```
-GET http://localhost:5000/api/audit?limit=100
-```
-
-## Testing
-
-### Test API Manually
+### Test API Connectivity
 ```bash
-# Get all rules
+# Check API status
+curl http://localhost:5000/api/status
+
+# Test API response
 curl http://localhost:5000/api/rules
-
-# Disable rule #9 (Node-RED Access)
-curl -X POST http://localhost:5000/api/rules/9/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"field":"rule_enabled","value":0}'
-
-# Enable rule #9
-curl -X POST http://localhost:5000/api/rules/9/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"field":"rule_enabled","value":1}'
 ```
 
-### Verify nftables Rules
+### Verify nftables Configuration
 ```bash
-# Check active rules
+# View active firewall rules
 sudo nft list ruleset
 
-# Check if specific port is blocked
-sudo nft list chain inet filter input | grep 1880
+# Check specific chain
+sudo nft list chain inet filter input
 ```
 
-### Check Database
+## Maintenance
+
+### Updating the System
+
 ```bash
-sqlite3 /opt/seer/firewall.db "SELECT id, policy, rule_enabled FROM policy_rules;"
+# Navigate to repository
+cd firewall
+
+# Pull latest changes
+git pull origin main
+
+# Run update script
+sudo ./update.sh
 ```
 
-## Logs
+### Uninstalling
 
-### API Logs
 ```bash
-sudo journalctl -u seer-firewall.service -f
+# Run uninstall script
+cd firewall
+sudo ./uninstall.sh
 ```
 
-### nftables Logs
+## Useful Commands
+
 ```bash
-sudo journalctl -k | grep NFT
+# Service management
+sudo systemctl status seer-firewall.service    # Check status
+sudo systemctl restart seer-firewall.service   # Restart service
+sudo systemctl stop seer-firewall.service      # Stop service
+sudo systemctl start seer-firewall.service     # Start service
+
+# View logs
+sudo journalctl -u seer-firewall.service -f    # Follow logs
+sudo journalctl -u seer-firewall.service -n 50 # Last 50 lines
+
+# Firewall management
+sudo nft list ruleset                          # View all rules
+sudo systemctl status nftables                 # Check nftables status
+sudo systemctl restart nftables                # Reload firewall
 ```
-
-### Audit Log (Database)
-```bash
-sqlite3 /opt/seer/firewall.db "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 20;"
-```
-
-## Important Notes
-
-1. **Critical Rules**: Some rules (DHCP, Loopback, Established Connections) should NEVER be disabled or you'll lose network connectivity
-
-2. **Reboot Persistence**: Rule states are saved in SQLite, so disabled rules stay disabled after reboot
-
-3. **Security**: The API runs on port 5000 - ensure it's only accessible from LAN/Tailnet
-
-4. **Backup**: Regular backup your database:
-   ```bash
-   sqlite3 /opt/seer/firewall.db ".backup /opt/seer/backups/firewall_$(date +%Y%m%d).db"
-   ```
 
 ## Troubleshooting
 
-### API Not Starting
+### Service Won't Start
 ```bash
-# Check Python errors
-sudo journalctl -u seer-firewall.service -n 50
+# Check detailed logs
+sudo journalctl -u seer-firewall.service -n 100 --no-pager
 
-# Test manually
+# Test API manually
 cd /opt/seer
+source venv/bin/activate
 python3 api.py
 ```
 
-### Toggle Not Working
-1. Check API is running: `curl http://localhost:5000/api/status`
-2. Check browser console for JavaScript errors
-3. Verify CORS is enabled in api.py
+### Port Already in Use
+```bash
+# Check what's using port 5000
+sudo netstat -tulpn | grep 5000
+sudo lsof -i :5000
+```
 
-### Rules Not Applied After Reboot
-1. Check database: `sqlite3 /opt/seer/firewall.db "SELECT * FROM policy_rules;"`
-2. Check nftables.conf was regenerated
-3. Check nftables service: `sudo systemctl status nftables`
+### Python Dependencies Missing
+```bash
+cd /opt/seer
+source venv/bin/activate
+pip install flask flask-cors
+deactivate
+```
 
-## Next Steps
+## Security Notes
 
-After installation:
-1. Access web interface via Node-RED
-2. Test toggling a non-critical rule (like Node-RED Access)
-3. Verify rule is disabled: `sudo nft list ruleset | grep 1880`
-4. Check database: `sqlite3 /opt/seer/firewall.db "SELECT rule_enabled FROM policy_rules WHERE id=9;"`
-5. Reboot and verify rule stays disabled
+- The API runs on port 5000 (localhost by default)
+- Ensure firewall rules are properly configured to restrict access
+- Keep the system updated with `sudo ./update.sh`
+- Regular backup of `/opt/seer/` directory recommended
+
+## Support
+
+For issues, questions, or contributions:
+- GitHub Repository: https://github.com/lyncsolutionsph/firewall
+- Check existing documentation in the repository
+- Review logs: `sudo journalctl -u seer-firewall.service -f`

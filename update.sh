@@ -1,7 +1,7 @@
-chatg#!/bin/bash
+#!/bin/bash
 
 ###############################################################################
-# SEER Firewall Management System - Git Update Script
+# SEER Firewall Management System - Update Script
 # Updates an existing installation from git repository
 ###############################################################################
 
@@ -15,10 +15,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="/opt/seer-firewall"
+INSTALL_DIR="/opt/seer"
 SERVICE_NAME="seer-firewall"
-DB_DIR="/home/admin/.node-red/seer_database"
-DB_FILE="$DB_DIR/seer.db"
 
 # Functions
 print_header() {
@@ -178,12 +176,12 @@ pull_updates() {
 backup_database() {
     print_header "Backing Up Database"
     
-    if [[ -f "$DB_FILE" ]]; then
-        BACKUP_FILE="$DB_FILE.backup.$(date +%Y%m%d_%H%M%S)"
-        cp "$DB_FILE" "$BACKUP_FILE"
-        print_success "Database backed up to: $BACKUP_FILE"
+    if [[ -f "$INSTALL_DIR/database.sql" ]]; then
+        BACKUP_FILE="$HOME/database.sql.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$INSTALL_DIR/database.sql" "$BACKUP_FILE"
+        print_success "Database schema backed up to: $BACKUP_FILE"
     else
-        print_warning "Database not found, skipping backup"
+        print_warning "Database schema not found, skipping backup"
     fi
 }
 
@@ -205,29 +203,13 @@ update_files() {
     
     # Update Python API
     if [[ -f "$SCRIPT_DIR/api.py" ]]; then
-        cp "$SCRIPT_DIR/api.py" "$INSTALL_DIR/"
+        sudo cp "$SCRIPT_DIR/api.py" "$INSTALL_DIR/"
         print_success "Updated api.py"
-    fi
-    
-    # Update web interface files
-    if [[ -f "$SCRIPT_DIR/index.html" ]]; then
-        cp "$SCRIPT_DIR/index.html" "$INSTALL_DIR/static/"
-        print_success "Updated index.html"
-    fi
-    
-    if [[ -f "$SCRIPT_DIR/index.css" ]]; then
-        cp "$SCRIPT_DIR/index.css" "$INSTALL_DIR/static/"
-        print_success "Updated index.css"
-    fi
-    
-    if [[ -f "$SCRIPT_DIR/index.js" ]]; then
-        cp "$SCRIPT_DIR/index.js" "$INSTALL_DIR/static/"
-        print_success "Updated index.js"
     fi
     
     # Update database schema (if needed)
     if [[ -f "$SCRIPT_DIR/database.sql" ]]; then
-        cp "$SCRIPT_DIR/database.sql" "$INSTALL_DIR/"
+        sudo cp "$SCRIPT_DIR/database.sql" "$INSTALL_DIR/"
         print_success "Updated database.sql"
     fi
 }
@@ -240,7 +222,7 @@ update_python_packages() {
     if [[ -d "venv" ]]; then
         print_info "Updating pip and packages..."
         source venv/bin/activate
-        pip install --quiet --upgrade pip flask flask-cors
+        pip install --upgrade pip flask flask-cors
         print_success "Python packages updated"
         deactivate
     else
@@ -258,14 +240,15 @@ update_nftables_config() {
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             # Backup current config
-            cp /etc/nftables.conf /etc/nftables.conf.backup.$(date +%Y%m%d_%H%M%S)
+            sudo cp /etc/nftables.conf /etc/nftables.conf.backup.$(date +%Y%m%d_%H%M%S)
             print_success "Backed up current nftables.conf"
             
-            cp "$SCRIPT_DIR/nftables.conf" "/etc/nftables.conf"
-            print_success "Updated nftables.conf"
+            sudo cp "$SCRIPT_DIR/nftables.conf" "/etc/nftables.conf"
+            sudo cp "$SCRIPT_DIR/nftables.conf" "/etc/nftables.conf.template"
+            print_success "Updated nftables.conf and template"
             
             print_info "Reloading firewall..."
-            systemctl restart nftables
+            sudo systemctl restart nftables
             print_success "Firewall reloaded"
         else
             print_info "Skipping nftables.conf update"
@@ -296,28 +279,17 @@ start_service() {
 print_summary() {
     print_header "Update Complete!"
     
-    IP_ADDR=$(ip -4 addr show br0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    if [[ -z "$IP_ADDR" ]]; then
-        IP_ADDR=$(hostname -I | awk '{print $1}')
-    fi
-    
     echo ""
     print_success "SEER Firewall Management System updated successfully"
     echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}Service Status:${NC}"
     echo "  • Service: ${SERVICE_NAME}"
     echo "  • Status: $(systemctl is-active ${SERVICE_NAME})"
-    echo ""
-    echo -e "${GREEN}Access Information:${NC}"
-    echo "  • Web Interface: http://${IP_ADDR}:5000/"
     echo ""
     echo -e "${GREEN}Useful Commands:${NC}"
     echo "  • Check status: sudo systemctl status ${SERVICE_NAME}"
     echo "  • View logs: sudo journalctl -u ${SERVICE_NAME} -f"
     echo "  • Restart: sudo systemctl restart ${SERVICE_NAME}"
-    echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
 
